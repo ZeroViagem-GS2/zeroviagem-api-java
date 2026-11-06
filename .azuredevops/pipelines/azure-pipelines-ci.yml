@@ -1,0 +1,60 @@
+# Integracao continua da API Java
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+  - checkout: self
+
+  - task: JavaToolInstaller@0
+    displayName: 'Configurar Java 17'
+    inputs:
+      versionSpec: '17'
+      jdkArchitectureOption: 'x64'
+      jdkSourceOption: 'PreInstalled'
+
+  - bash: |
+      set -euo pipefail
+
+      chmod +x mvnw
+      ./mvnw -B clean verify
+    displayName: 'Compilar e executar testes'
+
+  - task: PublishTestResults@2
+    displayName: 'Publicar resultados dos testes'
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFormat: 'JUnit'
+      testResultsFiles: '**/surefire-reports/TEST-*.xml'
+      searchFolder: '$(Build.SourcesDirectory)'
+      failTaskOnFailedTests: true
+      testRunTitle: 'Testes da API - CI'
+
+  - bash: |
+      set -euo pipefail
+
+      shopt -s nullglob
+      jars=(target/*.jar)
+
+      if [ "${#jars[@]}" -ne 1 ]; then
+        echo "ERRO: esperado exatamente um JAR em target/; encontrados: ${#jars[@]}"
+        exit 1
+      fi
+
+      mkdir -p "$(Build.ArtifactStagingDirectory)"
+      cp "${jars[0]}" "$(Build.ArtifactStagingDirectory)/api.jar"
+    displayName: 'Preparar JAR para publicacao'
+
+  - task: PublishPipelineArtifact@1
+    displayName: 'Publicar artefato da API'
+    inputs:
+      targetPath: '$(Build.ArtifactStagingDirectory)'
+      artifact: 'zeroviagem-api'
+      publishLocation: 'pipeline'

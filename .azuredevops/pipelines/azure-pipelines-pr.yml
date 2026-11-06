@@ -1,0 +1,34 @@
+# Validacao de Pull Requests no Azure Repos
+
+trigger: none
+pr: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+  - checkout: self
+
+  - task: JavaToolInstaller@0
+    displayName: 'Configurar Java 17'
+    inputs:
+      versionSpec: '17'
+      jdkArchitectureOption: 'x64'
+      jdkSourceOption: 'PreInstalled'
+
+  - bash: |
+      set -euo pipefail
+
+      chmod +x mvnw
+      ./mvnw -B clean verify
+    displayName: 'Compilar e executar testes'
+
+  - task: PublishTestResults@2
+    displayName: 'Publicar resultados dos testes'
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFormat: 'JUnit'
+      testResultsFiles: '**/surefire-reports/TEST-*.xml'
+      searchFolder: '$(Build.SourcesDirectory)'
+      failTaskOnFailedTests: true
+      testRunTitle: 'Testes da API - Validacao de PR'
